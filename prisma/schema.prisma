@@ -1,0 +1,42 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Usuario {
+  id             Int             @id @default(autoincrement())
+  email          String          @unique
+  nombre         String
+  apellido       String
+  whatsapp       String
+  participaciones Participacion[] // Un usuario tiene muchas participaciones
+  fecha_creacion DateTime        @default(now())
+}
+
+model Participacion {
+  id             Int      @id @default(autoincrement())
+  boleta_path    String   // Path en Google Cloud Storage
+  es_ganador     Boolean  @default(false)
+  fecha_subida   DateTime @default(now())
+  premio         String
+  estado         EstadoParticipacion @default(PENDIENTE)
+  // Relación con Usuario
+  usuario        Usuario  @relation(fields: [usuarioId], references: [id])
+  usuarioId      Int
+}
+
+enum EstadoParticipacion {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+}
