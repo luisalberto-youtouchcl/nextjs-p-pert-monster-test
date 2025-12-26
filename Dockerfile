@@ -6,6 +6,9 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* ./
+
+ENV PRISMA_SKIP_POSTINSTALL_GENERATE=1
+
 RUN \
   if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
   elif [ -f package-lock.json ]; then npm ci; \
@@ -19,20 +22,23 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# 1. BUILD-TIME ARGUMENTS
-ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
+RUN export DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder" && \
+    if [ -f yarn.lock ]; then yarn prisma generate; \
+    elif [ -f package-lock.json ]; then npx prisma generate; \
+    elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm prisma generate; \
+    fi
 
-# 2. ASSIGN TO ENV
+# Build-time arguments for Next.js
+ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
 ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 
-# 3. BUILD-TIME PLACEHOLDERS
+# Other build-time placeholders
 ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
 ENV TURNSTILE_SECRET_KEY="placeholder_for_build"
 ENV GCS_PROJECT_ID="placeholder_for_build"
 ENV GCS_BUCKET_NAME="placeholder_for_build"
 
-# [Inference] Using printf instead of Heredoc (<<EOF) to avoid "unknown instruction" errors 
-# in older Cloud Build environments.
+# Ensure standalone output
 RUN printf 'import type { NextConfig } from "next";\n\nconst nextConfig: NextConfig = {\n  output: "standalone",\n  typescript: {\n    ignoreBuildErrors: true,\n  },\n  eslint: {\n    ignoreDuringBuilds: true,\n  }\n};\n\nexport default nextConfig;' > next.config.ts
 
 RUN \
