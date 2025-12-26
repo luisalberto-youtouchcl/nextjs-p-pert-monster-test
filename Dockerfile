@@ -45,7 +45,7 @@ ENV GCS_BUCKET_NAME="placeholder_for_build"
 ENV GOOGLE_SERVICE_ACCOUNT_KEY="{}"
 
 # Ensure standalone output for Cloud Run
-RUN printf 'import type { NextConfig } from "next";\n\nconst nextConfig: NextConfig = {\n  output: "standalone",\n  typescript: {\n    ignoreBuildErrors: true,\n  },\n};\n\nexport default nextConfig;' > next.config.ts
+RUN printf 'import type { NextConfig } from "next";\n\nconst nextConfig: NextConfig = {\n  output: "standalone",\n};\n\nexport default nextConfig;' > next.config.ts
 
 RUN \
   if [ -f yarn.lock ]; then yarn run build; \
