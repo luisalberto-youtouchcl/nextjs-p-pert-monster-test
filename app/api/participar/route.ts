@@ -1,19 +1,9 @@
 import { NextResponse } from "next/server";
-import { Storage } from "@google-cloud/storage";
-import path from "path";
-
-const storage = new Storage({
-  keyFilename: path.join(process.cwd(), "secrets", "google-bucket.json"),
-});
+import { storage } from "@/lib/gcs";
+import prisma from "@/lib/prisma";
+import { verifyTurnstileToken } from "@/lib/captcha/verifyTurnstile";
 
 const BUCKET_NAME = process.env.GCS_BUCKET_NAME;
-
-try {
-  console.log("BUCKET_NAME:", BUCKET_NAME);
-} catch (error) {
-  console.error("BUCKET_NAME_ERROR:", error);
-}
-
 if (!BUCKET_NAME) {
   throw new Error("GCS_BUCKET_NAME is not defined");
 }
@@ -46,29 +36,10 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    try {
-      console.log(
-        "process.env.TURNSTILE_SECRET_KEY:",
-        process.env.TURNSTILE_SECRET_KEY === undefined ? "undefined" : "defined"
-      );
-    } catch (error) {
-      console.error("TURNSTILE_SECRET_KEY:", error);
-    }
-    // --- VALIDACIÓN DE CAPTCHA ---
-    const captchaResponse = await fetch(
-      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          secret: process.env.TURNSTILE_SECRET_KEY,
-          response: captchaToken,
-        }),
-      }
-    );
 
-    const captchaData = await captchaResponse.json();
-    if (!captchaData.success) {
+    // --- VALIDACIÓN DE CAPTCHA ---
+    const captchaValid = await verifyTurnstileToken(captchaToken);
+    if (!captchaValid) {
       return NextResponse.json(
         { ok: false, message: "Captcha inválido." },
         { status: 401 }
@@ -91,19 +62,35 @@ export async function POST(req: Request) {
 
     const storagePath = fileName;
 
-    // console.log("Datos para guardar en DB:", {
-    //   nombre,
-    //   email,
-    //   whatsapp,
-    //   boleta_referencia: storagePath,
-    // });
+    const es_ganador = Math.random() > 0.9;
+    const premio = es_ganador ? "Premio" : "";
 
-    // Lógica de ganador
-    const isWinner = Math.random() > 0.9;
+    const participacion = await prisma.participacion.create({
+      data: {
+        boleta_path: storagePath,
+        es_ganador,
+        premio,
+        usuario: {
+          connectOrCreate: {
+            where: {
+              email,
+            },
+            create: {
+              nombre,
+              apellido,
+              email,
+              whatsapp,
+              rol: "USER",
+            },
+          },
+        },
+      },
+    });
 
     return NextResponse.json({
       ok: true,
-      isWinner,
+      isWinner: participacion.es_ganador,
+      premio: participacion.premio,
     });
   } catch (error) {
     console.error("API_ERROR:", error);
