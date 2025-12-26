@@ -5,14 +5,15 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
+#  Copying lockfiles and package.json
 COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* ./
 
-ENV PRISMA_SKIP_POSTINSTALL_GENERATE=1
-
+#  Use --ignore-scripts to prevent 'prisma generate' from running 
+# during this stage, as the schema file is not yet available.
 RUN \
-  if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
-  elif [ -f package-lock.json ]; then npm ci; \
-  elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i --frozen-lockfile; \
+  if [ -f yarn.lock ]; then yarn --frozen-lockfile --ignore-scripts; \
+  elif [ -f package-lock.json ]; then npm ci --ignore-scripts; \
+  elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i --frozen-lockfile --ignore-scripts; \
   else echo "Lockfile not found." && exit 1; \
   fi
 
@@ -20,8 +21,11 @@ RUN \
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
+#  Now we copy the full source, including the /prisma folder
 COPY . .
 
+#  Now that the schema is present, we manually trigger the generation.
+# We provide a placeholder DATABASE_URL to satisfy Prisma's internal validation.
 RUN export DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder" && \
     if [ -f yarn.lock ]; then yarn prisma generate; \
     elif [ -f package-lock.json ]; then npx prisma generate; \
@@ -32,13 +36,13 @@ RUN export DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/pla
 ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
 ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 
-# Other build-time placeholders
+# Other build-time placeholders for Next.js page data collection
 ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
 ENV TURNSTILE_SECRET_KEY="placeholder_for_build"
 ENV GCS_PROJECT_ID="placeholder_for_build"
 ENV GCS_BUCKET_NAME="placeholder_for_build"
 
-# Ensure standalone output
+# Ensure standalone output for Cloud Run
 RUN printf 'import type { NextConfig } from "next";\n\nconst nextConfig: NextConfig = {\n  output: "standalone",\n  typescript: {\n    ignoreBuildErrors: true,\n  },\n  eslint: {\n    ignoreDuringBuilds: true,\n  }\n};\n\nexport default nextConfig;' > next.config.ts
 
 RUN \
