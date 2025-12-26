@@ -42,7 +42,7 @@ ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholde
 ENV TURNSTILE_SECRET_KEY="placeholder_for_build"
 ENV GCS_PROJECT_ID="placeholder_for_build"
 ENV GCS_BUCKET_NAME="placeholder_for_build"
-ENV GOOGLE_SERVICE_ACCOUNT_KEY="placeholder_for_build"
+ENV GOOGLE_SERVICE_ACCOUNT_KEY="{}"
 
 # Ensure standalone output for Cloud Run
 RUN printf 'import type { NextConfig } from "next";\n\nconst nextConfig: NextConfig = {\n  output: "standalone",\n  typescript: {\n    ignoreBuildErrors: true,\n  },\n};\n\nexport default nextConfig;' > next.config.ts
